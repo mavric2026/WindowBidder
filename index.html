@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <title>Window Bid Calculator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { -webkit-user-select: none; user-select: none; height: 100%; overflow: hidden; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: env(safe-area-inset-top, 6px) env(safe-area-inset-right, 6px) env(safe-area-inset-bottom, 6px) env(safe-area-inset-left, 6px); display: flex; flex-direction: column; height: 100vh; }
+    .container { max-width: 600px; margin: 0 auto; width: 100%; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    h1 { text-align: center; color: #00d4ff; font-size: 1.1rem; margin-bottom: 4px; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 5px; }
+    .tab { flex: 1; padding: 7px 4px; background: #16213e; border: 1px solid #0f3460; border-radius: 8px; color: #888; font-size: 0.7rem; font-weight: bold; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .tab.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; }
+    .tab span { display: block; font-size: 0.95rem; }
+
+    /* Scrollable content area */
+    .page { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .page.active { display: flex; }
+    .page-content { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+
+    /* Counter grid - 2 columns, fit as many as possible */
+    .counter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding-bottom: 4px; }
+
+    .counter-btn {
+      background: #16213e;
+      border: 2px solid #0f3460;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.1s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      min-height: 52px;
+      position: relative;
+    }
+    .counter-btn:active { transform: scale(0.96); background: #0f3460; border-color: #00d4ff; }
+    .counter-btn.has-count { border-color: #00d4ff; background: #0f2a4a; }
+
+    .counter-btn .btn-up {
+      font-size: 0.7rem; color: #00ff88; width: 100%; text-align: center; padding: 1px 0;
+    }
+    .counter-btn .btn-middle { display: flex; flex-direction: column; align-items: center; padding: 1px 3px; }
+    .counter-btn .btn-label { font-size: 0.62rem; color: #fff; font-weight: 700; text-align: center; line-height: 1.1; }
+    .counter-btn .btn-count { font-size: 1.2rem; font-weight: bold; color: #00d4ff; line-height: 1.1; }
+    .counter-btn.has-count .btn-count { color: #00ff88; }
+    .counter-btn .btn-price { font-size: 0.55rem; color: #aaa; }
+    .counter-btn .btn-down { font-size: 0.7rem; color: #e94560; width: 100%; text-align: center; padding: 1px 0; }
+
+    /* Totals card */
+    .totals-card { text-align: center; padding: 6px 8px; flex-shrink: 0; }
+    .total-display { font-size: 2.2rem; font-weight: bold; color: #00ff88; line-height: 1; }
+    .total-breakdown { font-size: 0.65rem; color: #888; margin-top: 1px; }
+    .travel-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 0.7rem; }
+    .travel-row label { color: #ccc; }
+    .toggle { width: 34px; height: 18px; background: #0f3460; border-radius: 9px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .toggle.on { background: #00d4ff; }
+    .toggle::after { content: ''; position: absolute; width: 13px; height: 13px; background: white; border-radius: 50%; top: 2.5px; left: 2.5px; transition: left 0.2s; }
+    .toggle.on::after { left: 18.5px; }
+    .travel-note { font-size: 0.6rem; color: #ff6b6b; }
+
+    /* Action buttons - sticky bottom */
+    .actions { display: flex; gap: 6px; padding: 6px 0 0 0; flex-shrink: 0; }
+    button.action { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+    .btn-reset { background: #e94560; color: white; }
+    .btn-save { background: #0f3460; color: #00d4ff; }
+    .btn-send { background: #00d4ff; color: #1a1a2e; }
+
+    /* Details page */
+    .card { background: #16213e; border-radius: 10px; padding: 8px; margin-bottom: 5px; border: 1px solid #0f3460; }
+    .card h2 { font-size: 0.75rem; color: #00d4ff; margin-bottom: 5px; }
+    .field-row { display: flex; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+    .field-row input { flex: 1; min-width: 100px; padding: 6px 8px; border-radius: 6px; border: 1px solid #0f3460; background: #1a1a2e; color: #e0e0e0; font-size: 0.75rem; }
+    .tier-selector { display: flex; gap: 5px; }
+    .tier-btn { flex: 1; padding: 6px 3px; border: 2px solid #0f3460; border-radius: 7px; background: #1a1a2e; color: #888; cursor: pointer; text-align: center; transition: all 0.15s; font-size: 0.65rem; }
+    .tier-btn.active { border-color: #00d4ff; background: #0f3460; color: #00d4ff; }
+    .tier-btn .tier-name { display: block; font-size: 0.75rem; font-weight: bold; }
+    .tier-btn .tier-desc { display: block; font-size: 0.55rem; font-weight: normal; opacity: 0.7; }
+
+    /* Quote preview */
+    .quote-preview { display: none; background: white; color: #222; padding: 12px; border-radius: 10px; font-size: 0.75rem; overflow-y: auto; max-height: 70vh; }
+    .quote-preview h3 { color: #1a1a2e; margin-bottom: 2px; font-size: 0.9rem; }
+    .quote-preview .quote-header { display: flex; justify-content: space-between; border-bottom: 2px solid #1a1a2e; padding-bottom: 6px; margin-bottom: 6px; align-items: start; }
+    .quote-preview table { width: 100%; border-collapse: collapse; font-size: 0.7rem; margin: 5px 0; }
+    .quote-preview th { text-align: left; border-bottom: 1px solid #ccc; padding: 2px 4px; color: #666; }
+    .quote-preview td { padding: 2px 4px; border-bottom: 1px solid #eee; }
+    .quote-preview .quote-total { text-align: right; font-weight: bold; font-size: 0.9rem; border-top: 2px solid #1a1a2e; padding-top: 4px; margin-top: 3px; }
+    .quote-preview .close-btn { background: #1a1a2e; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; float: right; font-size: 0.7rem; }
+    .quote-preview .quote-footer { margin-top: 8px; font-size: 0.65rem; color: #888; text-align: center; line-height: 1.4; }
+
+    /* Saved bids */
+    .saved-bids { padding-bottom: 6px; }
+    .bid-item { background: #16213e; border-radius: 8px; padding: 8px; margin-bottom: 5px; border: 1px solid #0f3460; }
+    .bid-info { display: flex; justify-content: space-between; align-items: center; }
+    .bid-name { font-weight: bold; color: #00d4ff; font-size: 0.8rem; }
+    .bid-meta { font-size: 0.6rem; color: #888; margin-top: 1px; }
+    .bid-total { font-weight: bold; color: #00ff88; font-size: 0.9rem; }
+    .bid-delete { background: none; border: none; color: #e94560; cursor: pointer; font-size: 0.65rem; margin-left: 5px; }
+    .bid-tier { font-size: 0.55rem; background: #0f3460; color: #00d4ff; padding: 1px 4px; border-radius: 3px; margin-left: 3px; }
+
+    /* Sticky footer for actions on details page */
+    #page-details .actions { position: sticky; bottom: 0; background: #1a1a2e; margin: 0 -6px; padding: 6px 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Window Bid Calculator</h1>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-count" onclick="showTab('count')"><span>🔢</span>Count</div>
+      <div class="tab" id="tab-details" onclick="showTab('details')"><span>📋</span>Details</div>
+      <div class="tab" id="tab-bids" onclick="showTab('bids')"><span>📁</span>Saved</div>
+    </div>
+
+    <!-- COUNT PAGE -->
+    <div id="page-count" class="page active">
+      <div class="page-content">
+        <div class="counter-grid" id="counterGrid"></div>
+        <div class="card totals-card">
+          <div class="total-display" id="grandTotal">$0.00</div>
+          <div class="total-breakdown" id="totalBreakdown">0 windows · Basic Tier</div>
+          <div class="travel-row">
+            <label>Travel Fee (50+ mins)</label>
+            <div class="toggle" id="travelToggle" onclick="toggleTravel()"></div>
+          </div>
+          <div class="travel-note" id="travelNote" style="display:none">10% travel surcharge applied</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="action btn-reset" onclick="resetCounters()">Reset</button>
+        <button class="action btn-save" onclick="showTab('details')">Next →</button>
+      </div>
+    </div>
+
+    <!-- DETAILS PAGE -->
+    <div id="page-details" class="page">
+      <div class="page-content">
+        <div class="card">
+          <h2>Property Info</h2>
+          <div class="field-row">
+            <input type="text" id="customerName" placeholder="Customer Name">
+            <input type="tel" id="phone" placeholder="Phone">
+          </div>
+          <div class="field-row">
+            <input type="email" id="email" placeholder="Email" style="min-width:100%;flex:1">
+          </div>
+          <div class="field-row">
+            <input type="text" id="address" placeholder="Address" style="min-width:100%;flex:1">
+          </div>
+        </div>
+        <div class="card">
+          <h2>Service Tier</h2>
+          <div class="tier-selector">
+            <div class="tier-btn active" data-tier="basic" onclick="selectTier('basic')">
+              <span class="tier-name">Basic</span>
+              <span class="tier-desc">Outside Only</span>
+            </div>
+            <div class="tier-btn" data-tier="premium" onclick="selectTier('premium')">
+              <span class="tier-name">Premium</span>
+              <span class="tier-desc">In/Out</span>
+            </div>
+            <div class="tier-btn" data-tier="luxury" onclick="selectTier('luxury')">
+              <span class="tier-name">Luxury</span>
+              <span class="tier-desc">I/O+Screens+Tracks</span>
+            </div>
+          </div>
+        </div>
+        <div class="card totals-card">
+          <div class="total-display" id="grandTotal2">$0.00</div>
+          <div class="total-breakdown" id="totalBreakdown2">0 windows · Basic Tier</div>
+          <div class="travel-note" id="travelNote2" style="display:none">10% travel surcharge applied</div>
+        </div>
+        <div class="quote-preview" id="quotePreview">
+          <button class="close-btn" onclick="document.getElementById('quotePreview').style.display='none'">Close</button>
+          <div class="quote-header">
+            <div>
+              <h3>Spotless Window Washing</h3>
+              <div style="font-size:0.65rem;color:#666">Crystal clear — every time.</div>
+            </div>
+            <div style="text-align:right;font-size:0.65rem;color:#666">
+              Licensed & Insured<br>Free Estimates<br>100% Satisfaction Guarantee
+            </div>
+          </div>
+          <div id="quoteContent"></div>
+          <div class="quote-footer">
+            Spotless Window Washing · Central Arkansas · Est. 2003<br>
+            Thank you for your business!
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="action btn-save" onclick="showTab('count')">← Back</button>
+        <button class="action btn-save" onclick="saveBid()">Save</button>
+        <button class="action btn-send" onclick="showQuote()">Quote</button>
+      </div>
+    </div>
+
+    <!-- SAVED BIDS PAGE -->
+    <div id="page-bids" class="page">
+      <div class="page-content saved-bids" id="savedBids"></div>
+    </div>
+  </div>
+
+  <script>
+    const pricing = [
+      { type: 'lower',       label: 'Lower',            basic: 8.05,  premium: 12.00, luxury: 12.00 },
+      { type: 'upper',       label: 'Upper',            basic: 10.35, premium: 14.40, luxury: 14.40 },
+      { type: 'screens',     label: 'Screens',           basic: null,  premium: null,  luxury: 3.00   },
+      { type: 'tracks',      label: 'Tracks',            basic: null,  premium: null,  luxury: 3.00   },
+      { type: 'garage',      label: 'Garage',            basic: 2.00,  premium: 4.00,  luxury: 4.00   },
+      { type: 'eyebrow_low', label: 'Eyebrow Low',       basic: 4.60,  premium: 8.40,  luxury: 8.40   },
+      { type: 'eyebrow_up',  label: 'Eyebrow Up',       basic: 6.90,  premium: 10.80, luxury: 10.80 },
+      { type: 'french_low',  label: 'French Lower',     basic: 11.50, premium: 15.60, luxury: 15.60 },
+      { type: 'french_up',   label: 'French Upper',     basic: 13.80, premium: 18.00, luxury: 18.00 },
+      { type: 'skylights',   label: 'Skylights',        basic: 10.00, premium: 20.00, luxury: 20.00 },
+      { type: 'lofted',      label: 'Lofted Inside',    basic: null,  premium: 9.00,  luxury: 9.00   },
+    ];
+
+    let currentTier = 'basic';
+    let counts = {};
+    let travelFee = false;
+    pricing.forEach(p => counts[p.type] = 0);
+
+    function buildCounterGrid() {
+      const grid = document.getElementById('counterGrid');
+      grid.innerHTML = '';
+      pricing.forEach(p => {
+        const price = p[currentTier];
+        const available = price !== null;
+        const btn = document.createElement('div');
+        btn.className = 'counter-btn' + (counts[p.type] > 0 ? ' has-count' : '');
+        btn.id = 'btn_' + p.type;
+        btn.innerHTML = `
+          <div class="btn-up" onclick="event.stopPropagation(); increment('${p.type}')">▲</div>
+          <div class="btn-middle">
+            <div class="btn-label">${p.label}</div>
+            <div class="btn-count" id="count_${p.type}">${counts[p.type]}</div>
+            <div class="btn-price">${available ? '$' + price.toFixed(2) : '<span style="color:#555">—</span>'}</div>
+          </div>
+          <div class="btn-down" onclick="event.stopPropagation(); decrement('${p.type}')">▼</div>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    function increment(type) {
+      counts[type]++;
+      document.getElementById('count_' + type).textContent = counts[type];
+      document.getElementById('btn_' + type).classList.add('has-count');
+      updateTotal();
+    }
+
+    function decrement(type) {
+      if (counts[type] > 0) {
+        counts[type]--;
+        document.getElementById('count_' + type).textContent = counts[type];
+        const btn = document.getElementById('btn_' + type);
+        if (counts[type] === 0) btn.classList.remove('has-count');
+      }
+      updateTotal();
+    }
+
+    function resetCounters() {
+      pricing.forEach(p => counts[p.type] = 0);
+      document.querySelectorAll('.counter-btn').forEach(b => b.classList.remove('has-count'));
+      document.querySelectorAll('[id^=count_]').forEach(el => el.textContent = '0');
+      travelFee = false;
+      document.getElementById('travelToggle').classList.remove('on');
+      document.getElementById('travelNote').style.display = 'none';
+      document.getElementById('travelNote2').style.display = 'none';
+      updateTotal();
+    }
+
+    function toggleTravel() {
+      travelFee = !travelFee;
+      document.getElementById('travelToggle').classList.toggle('on', travelFee);
+      const note = document.getElementById('travelNote');
+      const note2 = document.getElementById('travelNote2');
+      note.style.display = travelFee ? 'block' : 'none';
+      note2.style.display = travelFee ? 'block' : 'none';
+      updateTotal();
+    }
+
+    function updateTotal() {
+      let subtotal = 0;
+      let windowCount = 0;
+      pricing.forEach(p => {
+        const price = p[currentTier];
+        if (price !== null && counts[p.type] > 0) {
+          subtotal += price * counts[p.type];
+          windowCount += counts[p.type];
+        }
+      });
+      const total = travelFee ? subtotal * 1.10 : subtotal;
+      const tierNames = { basic: 'Basic', premium: 'Premium', luxury: 'Luxury' };
+      const suffix = travelFee ? ' · 10% travel' : '';
+      const display = '$' + total.toFixed(2);
+      document.getElementById('grandTotal').textContent = display;
+      document.getElementById('grandTotal2').textContent = display;
+      const breakdown = `${windowCount} window${windowCount !== 1 ? 's' : ''} · ${tierNames[currentTier]} Tier${suffix}`;
+      document.getElementById('totalBreakdown').textContent = breakdown;
+      document.getElementById('totalBreakdown2').textContent = breakdown;
+    }
+
+    function selectTier(tier) {
+      currentTier = tier;
+      document.querySelectorAll('.tier-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('.tier-btn[data-tier="' + tier + '"]').classList.add('active');
+      buildCounterGrid();
+      updateTotal();
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('page-' + tab).classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+      if (tab === 'bids') renderBids();
+    }
+
+    function saveBid() {
+      const name = document.getElementById('customerName').value || 'Unnamed Customer';
+      const address = document.getElementById('address').value;
+      const phone = document.getElementById('phone').value;
+      const email = document.getElementById('email').value;
+      const total = document.getElementById('grandTotal2').textContent;
+      const tier = { basic: 'Basic', premium: 'Premium', luxury: 'Luxury' }[currentTier];
+      const lines = pricing.filter(p => counts[p.type] > 0 && p[currentTier] !== null)
+        .map(p => p.label + ' x' + counts[p.type]).join(', ');
+      const bid = { name, address, phone, email, total, tier, lines, date: new Date().toLocaleString() };
+      const bids = JSON.parse(localStorage.getItem('windowBids3') || '[]');
+      bids.unshift(bid);
+      localStorage.setItem('windowBids3', JSON.stringify(bids.slice(0, 50)));
+      renderBids();
+      showTab('bids');
+    }
+
+    function deleteBid(i) {
+      const bids = JSON.parse(localStorage.getItem('windowBids3') || '[]');
+      bids.splice(i, 1);
+      localStorage.setItem('windowBids3', JSON.stringify(bids));
+      renderBids();
+    }
+
+    function renderBids() {
+      const bids = JSON.parse(localStorage.getItem('windowBids3') || '[]');
+      const el = document.getElementById('savedBids');
+      if (bids.length === 0) {
+        el.innerHTML = '<div style="text-align:center;color:#888;font-size:0.8rem;padding:20px">No saved bids yet.<br>Count windows → Details → Save.</div>';
+        return;
+      }
+      el.innerHTML = '<div style="color:#00d4ff;font-size:0.8rem;margin-bottom:8px">Saved Bids</div>' +
+        bids.map((b, i) => `
+          <div class="bid-item">
+            <div class="bid-info">
+              <div>
+                <div class="bid-name">${b.name}<span class="bid-tier">${b.tier}</span></div>
+                <div class="bid-meta">${b.date}${b.address ? ' · ' + b.address : ''}</div>
+              </div>
+              <div>
+                <span class="bid-total">${b.total}</span>
+                <button class="bid-delete" onclick="deleteBid(${i})">X</button>
+              </div>
+            </div>
+            ${b.lines ? '<div style="font-size:0.6rem;color:#888;margin-top:2px">' + b.lines + '</div>' : ''}
+          </div>
+        `).join('');
+    }
+
+    function showQuote() {
+      const name = document.getElementById('customerName').value || 'Customer';
+      const address = document.getElementById('address').value;
+      const total = document.getElementById('grandTotal2').textContent;
+      const tier = { basic: 'Basic', premium: 'Premium', luxury: 'Luxury' }[currentTier];
+      const tierDesc = { basic: 'Outside Only', premium: 'In/Out', luxury: 'I/O + Screens + Tracks' }[currentTier];
+      const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      let rows = '';
+      let rowTotal = 0;
+      pricing.forEach(p => {
+        if (counts[p.type] > 0 && p[currentTier] !== null) {
+          const lineTotal = p[currentTier] * counts[p.type];
+          rowTotal += lineTotal;
+          rows += '<tr><td>' + p.label + '</td><td style="text-align:center">' + counts[p.type] + '</td><td style="text-align:right">$' + p[currentTier].toFixed(2) + '</td><td style="text-align:right">$' + lineTotal.toFixed(2) + '</td></tr>';
+        }
+      });
+      const travelAmount = travelFee ? rowTotal * 0.10 : 0;
+      document.getElementById('quoteContent').innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:0.75rem">
+          <div><strong>Quote for:</strong> ${name}</div>
+          <div><strong>Date:</strong> ${today}</div>
+        </div>
+        ${address ? '<div style="margin-bottom:4px;font-size:0.7rem"><strong>Property:</strong> ' + address + '</div>' : ''}
+        <div style="margin-bottom:4px;font-size:0.7rem"><strong>Service:</strong> ${tier} — ${tierDesc}</div>
+        <table><thead><tr><th>Service</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${rows}</tbody></table>
+        ${travelFee ? '<div style="text-align:right;font-size:0.7rem;color:#888">Subtotal: $' + rowTotal.toFixed(2) + '</div>' : ''}
+        ${travelFee ? '<div style="text-align:right;font-size:0.7rem;color:#e94560">Travel Fee (10%): +$' + travelAmount.toFixed(2) + '</div>' : ''}
+        <div class="quote-total">Total: ${total}</div>
+        <div style="font-size:0.65rem;color:#888;margin-top:4px;text-align:center">
+          Valid 30 days · 100% Satisfaction Guarantee · Licensed & Insured<br>
+          Spotless Window Washing · Central Arkansas · Est. 2003
+        </div>
+      `;
+      document.getElementById('quotePreview').style.display = 'block';
+    }
+
+    buildCounterGrid();
+    updateTotal();
+  </script>
+</body>
+</html>
